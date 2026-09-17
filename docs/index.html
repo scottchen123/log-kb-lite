@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>日志分析工具</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:#f6f8fb;color:#1a2332}
+.header{max-width:1120px;margin:0 auto;padding:24px 20px 8px}
+.h1{font-size:26px;font-weight:900}
+.sub{color:#5a6d8a;margin-top:6px;line-height:1.6;font-size:13px}
+.card{max-width:1120px;margin:14px auto;background:#fff;border:1px solid #e5e9f1;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(20,40,80,.06)}
+.steps{display:flex;gap:0;border-bottom:1px solid #eef2f7;background:#fbfdff}
+.step{flex:1;padding:12px 10px;text-align:center;font-size:13px;color:#6b7d9a;border-bottom:2px solid transparent;cursor:pointer}
+.step.active{color:#0f3bd1;border-color:#1a4de0;background:#f0f4ff;font-weight:700}
+.pane{display:none;padding:18px}
+.pane.active{display:block}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.box{border:1px solid #e6ebf2;border-radius:12px;padding:14px;background:#fbfdff}
+.box h3{margin:0 0 8px;font-size:13px;color:#22324d}
+.small{font-size:12px;color:#6b7d9a;line-height:1.7}
+.input,.textarea,.select{width:100%;background:#fff;border:1px solid #d9e1ee;color:#1a2332;border-radius:10px;padding:9px 11px;font-size:13px}
+.textarea{min-height:100px}
+.btn{border:0;background:#1a4de0;color:#fff;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer}
+.btn.ghost{background:#eef2ff;color:#1a4de0}
+.btn.line{background:#fff;border:1px solid #d9e1ee;color:#334763}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.table{width:100%;border-collapse:collapse;font-size:12px}
+.table th, .table td{border:1px solid #e6ebf2;padding:8px;text-align:left}
+.table th{background:#f3f6fb}
+.tag{font-size:11px;padding:4px 8px;border-radius:999px;background:#eef2ff;border:1px solid #d9e1ee;color:#1a4de0}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.kpi .box{text-align:center}
+.kpi b{font-size:20px}
+.log{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#0b1220;color:#cfe0ff;border-radius:10px;padding:12px;max-height:300px;overflow:auto;white-space:pre-wrap}
+.pill{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff;border:1px solid #d9e1ee}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="h1">日志分析工具</div>
+  <div class="sub">使用指引：① 导入语料（.md/.txt/.csv）② 配置分类与关键字 ③ 导入日志并分析 ④ 在结果页验收并导出。数据仅存于浏览器本地，刷新不上传。</div>
+</div>
+<div class="card">
+  <div class="steps">
+    <div class="step active" data-t="s1">① 语料导入</div>
+    <div class="step" data-t="s2">② 关键字与分类</div>
+    <div class="step" data-t="s3">③ 日志分析</div>
+    <div class="step" data-t="s4">④ 结果与验收</div>
+  </div>
+
+  <!-- S1 -->
+  <div id="s1" class="pane active">
+    <div class="grid">
+      <div class="box">
+        <h3>导入语料（知识库）</h3>
+        <div class="small">支持 .md / .txt / .csv 批量导入，每行一条语料。示例：告警描述、历史处置、SOP 片段。导入后可在右侧管理。</div>
+        <div style="height:8px"></div>
+        <input type="file" id="f1" accept=".md,.txt,.csv" multiple class="input"/>
+        <div style="height:8px"></div>
+        <div class="row"><button class="btn" onclick="loadSampleKB()">加载示例语料 12 条</button><button class="btn line" onclick="clearKB()">清空语料</button><button class="btn ghost" onclick="exportKB()">导出语料</button></div>
+        <div style="height:8px"></div>
+        <label class="small">手动追加一条</label><input id="kbOne" class="input" placeholder="例：VDI agent 503 超时 重启服务可恢复"/>
+        <div style="height:6px"></div><button class="btn line" onclick="addKBOne()">追加</button>
+      </div>
+      <div class="box">
+        <h3>当前语料 <span id="kbCount" class="tag">0 条</span></h3>
+        <div id="kbList" class="log">暂无语料，请导入或加载示例。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S2 -->
+  <div id="s2" class="pane">
+    <div class="grid">
+      <div class="box">
+        <h3>自定义关键字 → 问题分类</h3>
+        <div class="row" style="margin-bottom:8px">
+          <label class="small">匹配模式 <select id="matchMode" class="select" style="width:auto"><option value="contains">包含匹配（默认）</option><option value="word">词边界 \b（防子串误判）</option><option value="regex">正则 RegExp</option></select></label>
+          <span class="small">优先级：列表从上到下，越上越先命中 · 可用↑↓调整</span>
+        </div>
+        <div class="small">为每个分类配置关键字（逗号分隔），按当前匹配模式命中分类。已内置 4 类，可新增 / 编辑 / 删除，支持 ↑↓ 调整顺序。</div>
+        <div id="rules"></div>
+        <div style="height:10px"></div>
+        <div class="row"><input id="newCat" class="input" style="flex:1" placeholder="新分类名 如：数据库"/><input id="newKw" class="input" style="flex:1.6" placeholder="关键字逗号分隔 如：deadlock,slow query,PG"/><button class="btn" onclick="addRule()">新增分类</button></div>
+      </div>
+      <div class="box">
+        <h3>分类说明</h3>
+        <div class="small">
+          • 按列表顺序匹配，命中即归类，未命中归“未分类”<br/>
+          • 关键字不区分大小写<br/>
+          • 语料仅在结果中关联展示
+        </div>
+        <div style="height:8px"></div>
+        <button class="btn line" onclick="resetRules()">恢复默认 4 类示例</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 -->
+  <div id="s3" class="pane">
+    <div class="grid">
+      <div class="box">
+        <h3>导入待分析日志</h3>
+        <div class="small">支持批量导入 .log/.txt/.csv，或直接粘贴。每行视为一条日志。</div>
+        <input type="file" id="f2" accept=".log,.txt,.csv" multiple class="input"/>
+        <div style="height:8px"></div>
+        <textarea id="rawLogs" class="textarea" placeholder="粘贴日志，每行一条&#10;例：2026-09-17 10:02 VDI agent error 503 timeout&#10;2026-09-17 10:05 Kafka consumer lag 15000 partition 3"></textarea>
+        <div style="height:8px"></div>
+        <div class="row"><button class="btn" onclick="analyze()">开始分析</button><button class="btn line" onclick="loadSampleLogs()">加载示例日志 10 条</button><button class="btn ghost" onclick="clearLogs()">清空日志</button></div>
+      </div>
+      <div class="box">
+        <h3>分析设置</h3>
+        <div class="small">按已配置的分类与关键字对日志进行分类，生成统计与明细。</div>
+        <label class="small"><input type="checkbox" id="useKB" checked/> 在结果中关联语料（命中关键字时展示相关语料）</label>
+        <div style="height:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S4 -->
+  <div id="s4" class="pane">
+    <div class="kpi">
+      <div class="box"><div class="small">日志总量</div><b id="k1">0</b></div>
+      <div class="box"><div class="small">已分类</div><b id="k2">0</b></div>
+      <div class="box"><div class="small">未分类</div><b id="k3">0</b></div>
+      <div class="box"><div class="small">分类数</div><b id="k4">0</b></div>
+    </div>
+    <div class="grid" style="margin-top:12px">
+      <div class="box">
+        <h3>分类统计</h3>
+        <table class="table" id="statTbl"><tr><th>分类</th><th>数量</th><th>占比</th></tr></table>
+      </div>
+      <div class="box">
+        <h3>验收操作</h3>
+        <div class="small">对结果进行验收：确认会进入“已验收”，有误可改分类。支持导出验收后结果。</div>
+        <div style="height:8px"></div>
+        <div class="row"><button class="btn" onclick="acceptAll()">一键全部验收</button><button class="btn line" onclick="exportResult()">导出结果 CSV</button></div>
+        <div style="height:8px"></div><span id="accInfo" class="tag">已验收 0 / 0</span>
+      </div>
+    </div>
+    <div class="box" style="margin-top:12px">
+      <h3>明细与验收</h3>
+      <table class="table" id="resTbl"><tr><th>#</th><th>日志</th><th>命中关键字</th><th>分类</th><th>关联语料</th><th>验收</th></tr></table>
+    </div>
+  </div>
+</div>
+
+<div class="header small">提示：所有数据仅存于浏览器本地，支持导入/导出与结果 CSV 导出。</div>
+
+<script>
+const LS_KB='lk_kb_v2', LS_RULES='lk_rules_v2', LS_LOGS='lk_logs_v2', LS_RES='lk_res_v2';
+const $=s=>document.querySelector(s);
+document.querySelectorAll('.step').forEach(s=>s.addEventListener('click',()=>{
+  document.querySelectorAll('.step').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(x=>x.classList.remove('active'));
+  s.classList.add('active'); document.getElementById(s.dataset.t).classList.add('active');
+}));
+function loadKB(){ try{return JSON.parse(localStorage.getItem(LS_KB)||'[]')}catch(e){return []} }
+function saveKB(a){ localStorage.setItem(LS_KB, JSON.stringify(a)); renderKB(); }
+function renderKB(){
+  const a=loadKB(); $('#kbCount').textContent=a.length+' 条';
+  $('#kbList').textContent = a.length? a.map((x,i)=>`${i+1}. ${x}`).join('\n') : '暂无语料，请导入或加载示例。';
+}
+function loadSampleKB(){
+  const sample=[
+    'VDI agent 503 超时 重启 vdi-agent 服务可恢复',
+    'Kafka consumer lag 堆积 检查 partition 与消费速率',
+    'ES cluster red 分片未分配 重启异常节点',
+    'PG slow query 超 2s 需加索引',
+    '登录失败 账号锁定 重置密码',
+    '云桌面卡顿 CPU 85% 扩容或迁移',
+    '网络超时 网关 504 检查代理',
+    'SSL 证书过期 重新签发',
+    '工单返单 跨部门流转超时',
+    'Bug 阻塞 需提研发单',
+    '自助可拦截 前置校验缺失',
+    '计费账单异常 对账流程'
+  ]; saveKB(sample);
+}
+function clearKB(){ if(confirm('清空语料？')) saveKB([]); }
+function exportKB(){
+  const a=loadKB(); if(!a.length) return alert('无语料');
+  const blob=new Blob([a.join('\n')],{type:'text/plain'}); const url=URL.createObjectURL(blob);
+  const ah=document.createElement('a'); ah.href=url; ah.download='corpus.txt'; ah.click(); URL.revokeObjectURL(url);
+}
+function addKBOne(){
+  const v=$('#kbOne').value.trim(); if(!v) return; const a=loadKB(); a.push(v); saveKB(a); $('#kbOne').value='';
+}
+$('#f1').addEventListener('change', async e=>{
+  const files=[...e.target.files]; let a=loadKB();
+  for(const f of files){ const t=await f.text(); t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).forEach(s=>a.push(s)); }
+  saveKB(a); e.target.value='';
+});
+
+function loadRules(){ try{return JSON.parse(localStorage.getItem(LS_RULES)||'null')}catch(e){return null} }
+function saveRules(r){ localStorage.setItem(LS_RULES, JSON.stringify(r)); renderRules(); }
+function defaultRules(){ return [
+  {cat:'故障类', kws:['503','超时','error','失败','red','卡顿']},
+  {cat:'技术支持类', kws:['kafka','lag','partition','consumer']},
+  {cat:'咨询类', kws:['咨询','如何','怎么','计费']},
+  {cat:'Bug阻塞', kws:['bug','阻塞','deadlock']},
+] }
+function renderRules(){
+  let r=loadRules(); if(!r){ r=defaultRules(); saveRules(r); }
+  const el=$('#rules'); el.innerHTML='';
+  r.forEach((row,i)=>{
+    const d=document.createElement('div'); d.className='row'; d.style.margin='6px 0';
+    d.innerHTML=`<input class="input" style="flex:1" value="${row.cat}" onchange="editCat(${i},this.value)"><input class="input" style="flex:2" value="${row.kws.join(',')}" onchange="editKw(${i},this.value)"><button class="btn line" onclick="moveRule(${i},-1)">↑</button><button class="btn line" onclick="moveRule(${i},1)">↓</button><button class="btn line" onclick="delRule(${i})">删除</button>`;
+    el.appendChild(d);
+  });
+}
+function editCat(i,v){ const r=loadRules(); r[i].cat=v.trim()||r[i].cat; saveRules(r); }
+function editKw(i,v){ const r=loadRules(); r[i].kws=v.split(',').map(s=>s.trim()).filter(Boolean); saveRules(r); }
+function delRule(i){ const r=loadRules(); r.splice(i,1); saveRules(r); }
+function moveRule(i,dir){ const r=loadRules(); const j=i+dir; if(j<0||j>=r.length) return; const tmp=r[i]; r[i]=r[j]; r[j]=tmp; saveRules(r); }
+function addRule(){
+  const c=$('#newCat').value.trim(), k=$('#newKw').value.trim();
+  if(!c) return alert('填分类名');
+  const r=loadRules(); r.push({cat:c, kws:k?k.split(',').map(s=>s.trim()).filter(Boolean):[]}); saveRules(r);
+  $('#newCat').value=''; $('#newKw').value='';
+}
+function resetRules(){ localStorage.removeItem(LS_RULES); renderRules(); }
+
+function loadLogs(){ try{return JSON.parse(localStorage.getItem(LS_LOGS)||'[]')}catch(e){return []} }
+function saveLogs(a){ localStorage.setItem(LS_LOGS, JSON.stringify(a)); }
+$('#f2').addEventListener('change', async e=>{
+  const files=[...e.target.files]; let txt='';
+  for(const f of files){ txt+= await f.text() + '\n'; }
+  $('#rawLogs').value = ($('#rawLogs').value + '\n' + txt).trim();
+  e.target.value='';
+});
+function loadSampleLogs(){
+  $('#rawLogs').value = [
+    '2026-09-17 10:02 VDI agent error 503 timeout',
+    '2026-09-17 10:05 Kafka consumer lag 15000 partition 3',
+    '2026-09-17 10:07 PG slow query 3.2s deadlock detected',
+    '2026-09-17 10:10 用户咨询 计费账单如何对账',
+    '2026-09-17 10:12 登录失败 账号锁定',
+    '2026-09-17 10:15 ES cluster red 分片异常',
+    '2026-09-17 10:18 网络超时 网关 504',
+    '2026-09-17 10:20 云桌面卡顿 CPU 92%',
+    '2026-09-17 10:22 Bug 阻塞 需转研发',
+    '2026-09-17 10:25 咨询 如何重置密码'
+  ].join('\n');
+}
+function clearLogs(){ $('#rawLogs').value=''; localStorage.removeItem(LS_RES); renderRes([]); }
+
+function analyze(){
+  const raw=$('#rawLogs').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!raw.length) return alert('请导入或粘贴日志');
+  saveLogs(raw);
+  const rules=loadRules()||defaultRules();
+  const kb=loadKB();
+  const useKB=$('#useKB').checked;
+  const modeEl=document.getElementById('matchMode'); const mode=modeEl?modeEl.value:'contains';
+  function matchOne(line, kw, mode){
+    if(!kw) return false;
+    if(mode==='contains') return line.toLowerCase().includes(kw.toLowerCase());
+    if(mode==='word'){ const esc=kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); try{ return new RegExp('\\b'+esc+'\\b','i').test(line);} catch(e){ return line.toLowerCase().includes(kw.toLowerCase()); } }
+    if(mode==='regex'){ try{ return new RegExp(kw,'i').test(line);} catch(e){ return line.toLowerCase().includes(kw.toLowerCase()); } }
+    return false;
+  }
+  const res=raw.map((line,idx)=>{
+    let cat='未分类', hit='';
+    for(const r of rules){
+      const kw=r.kws.find(k=> matchOne(line, k, mode));
+      if(kw){ cat=r.cat; hit=kw; break; }
+    }
+    let kbHit='';
+    if(useKB && hit){ const f=kb.find(s=>s.toLowerCase().includes(hit.toLowerCase())); if(f) kbHit=f; }
+    return {idx:idx+1, line, cat, hit:hit||'-', kbHit:kbHit||'-', accepted:false};
+  });
+  localStorage.setItem(LS_RES, JSON.stringify(res));
+  // jump to s4
+  document.querySelectorAll('.step').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(x=>x.classList.remove('active'));
+  document.querySelector('[data-t="s4"]').classList.add('active');
+  document.getElementById('s4').classList.add('active');
+  renderRes(res);
+}
+function renderRes(res){
+  if(!res){ try{res=JSON.parse(localStorage.getItem(LS_RES)||'[]')}catch(e){res=[]} }
+  $('#k1').textContent=res.length;
+  const classified=res.filter(r=>r.cat!=='未分类').length;
+  $('#k2').textContent=classified; $('#k3').textContent=res.length-classified;
+  const cats=new Set(res.map(r=>r.cat)); $('#k4').textContent=cats.size;
+  // stat
+  const m={}; res.forEach(r=>m[r.cat]=(m[r.cat]||0)+1);
+  const tbl=$('#statTbl'); tbl.innerHTML='<tr><th>分类</th><th>数量</th><th>占比</th></tr>';
+  Object.entries(m).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{
+    const tr=document.createElement('tr'); tr.innerHTML=`<td>${k}</td><td>${v}</td><td>${res.length?Math.round(v/res.length*100)+'%':'-'}</td>`; tbl.appendChild(tr);
+  });
+  // detail
+  const tb=$('#resTbl'); tb.innerHTML='<tr><th>#</th><th>日志</th><th>命中</th><th>分类</th><th>关联语料</th><th>验收</th></tr>';
+  const rules=loadRules()||defaultRules();
+  res.forEach((r,i)=>{
+    const tr=document.createElement('tr');
+    const opts=rules.map(x=>`<option ${x.cat===r.cat?'selected':''}>${x.cat}</option>`).join('')+`<option ${r.cat==='未分类'?'selected':''}>未分类</option>`;
+    tr.innerHTML=`<td>${r.idx}</td><td style="max-width:280px;word-break:break-all">${r.line}</td><td><span class="pill">${r.hit}</span></td><td><select class="select" onchange="changeCat(${i},this.value)">${opts}</select></td><td style="max-width:220px;word-break:break-all">${r.kbHit}</td><td><label><input type="checkbox" ${r.accepted?'checked':''} onchange="toggleAcc(${i},this.checked)"> 已验收</label></td>`;
+    tb.appendChild(tr);
+  });
+  const acc=res.filter(r=>r.accepted).length;
+  $('#accInfo').textContent=`已验收 ${acc} / ${res.length}`;
+}
+function changeCat(i,v){ const res=JSON.parse(localStorage.getItem(LS_RES)||'[]'); res[i].cat=v; localStorage.setItem(LS_RES, JSON.stringify(res)); renderRes(res); }
+function toggleAcc(i,c){ const res=JSON.parse(localStorage.getItem(LS_RES)||'[]'); res[i].accepted=c; localStorage.setItem(LS_RES, JSON.stringify(res)); renderRes(res); }
+function acceptAll(){ const res=JSON.parse(localStorage.getItem(LS_RES)||'[]'); res.forEach(r=>r.accepted=true); localStorage.setItem(LS_RES, JSON.stringify(res)); renderRes(res); }
+function exportResult(){
+  const res=JSON.parse(localStorage.getItem(LS_RES)||'[]'); if(!res.length) return alert('无结果');
+  const header=['序号','日志','命中关键字','分类','关联语料','已验收'];
+  const rows=res.map(r=>[r.idx, `"${r.line.replace(/"/g,'""')}"`, r.hit, r.cat, `"${r.kbHit.replace(/"/g,'""')}"`, r.accepted?'是':'否']);
+  const csv=[header.join(','), ...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='analysis_result.csv'; a.click(); URL.revokeObjectURL(url);
+}
+renderKB(); renderRules(); renderRes();
+</script>
+</body>
+</html>
