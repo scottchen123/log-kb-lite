@@ -4,6 +4,17 @@
 
 在线演示：直接打开 `web/index.html` 即可使用（见下方快速开始）。
 
+## 下载
+
+- **Web 版（免安装）**：直接打开 `web/index.html` 或访问 GitHub Pages（如已开启）
+- **桌面版 exe**：到 [Releases](https://github.com/scottchen123/log-kb-lite/releases) 下载最新 `log-kb-lite Setup *.exe`，双击安装即可离线使用
+
+> 首次发布 exe：执行 `git tag v0.1.0 && git push origin v0.1.0` 会触发 Actions 自动打包并上传到 Releases
+
+---
+
+
+
 ---
 
 ## 使用指引

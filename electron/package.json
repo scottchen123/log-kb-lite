@@ -4,10 +4,32 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-builder --win --mac --linux"
+    "pack": "electron-builder --win --mac --linux",
+    "pack:win": "electron-builder --win"
   },
   "devDependencies": {
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.scottchen.logkblite",
+    "productName": "log-kb-lite",
+    "files": [
+      "main.js",
+      "../web/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
