@@ -4,13 +4,12 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [windows-latest]
-        # 如需同时出 mac/linux，可加 macos-latest / ubuntu-latest
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,7 +24,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ matrix.os }}
+          name: dist-windows-latest
           path: |
             electron/dist/*.exe
             electron/dist/*.blockmap
